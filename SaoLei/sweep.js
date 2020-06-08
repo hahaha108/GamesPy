@@ -28,10 +28,12 @@ let Board = {
     },
     bury: function (count, row, col, board) {
         let landmines = [];
+        let col_index = col - 1;
+        let row_index = row - 1;
         for (let c = 0; c < count; c++) {
             let landmine = {
-                x: Math.floor(Math.random() * col),
-                y: Math.floor(Math.random() * row)
+                x: Math.floor(Math.random() * col_index),
+                y: Math.floor(Math.random() * row_index)
             };
             if (landmine in landmines) {
                 c -= 1;
@@ -42,14 +44,15 @@ let Board = {
         }
 
         for (let i = 0; i < landmines.length; i++) {
-            // 埋雷并划定危险区域
+            // 埋雷并划定周边范围为危险区域
             board[landmines[i].y][landmines[i].x].isLandmine = true;
-            board[landmines[i].y][landmines[i].x].isDangerousZone = true;
-            this.neighborsHandle(landmines[i].x, landmines[i].y, row, col, board,(neighbor) => {
-                neighbor.isDangerousZone = true;
+            // board[landmines[i].y][landmines[i].x].img.src = "images/landmine.png";
+            this.neighborsHandle(landmines[i].x, landmines[i].y, row_index, col_index, board, (neighbor) => {
+                neighbor.neighborLandminesNumber += 1;
+                // if (!(neighbor.isLandmine)) {
+                //     neighbor.img.src = "images/" + neighbor.neighborLandminesNumber + ".png"
+                // }
             });
-
-
         }
 
         return board
@@ -91,16 +94,51 @@ function Grid(x, y) {
     this.x = x;
     this.y = y;
     this.isLandmine = false;
-    this.isDangerousZone = false;
+    this.neighborLandminesNumber = 0;
     this.size = 20;
     this.img = Util.loadImg("images/grid.png");
     this.img.style.height = this.size + 'px';
     this.img.style.width = this.size + 'px';
     this.img.style.left = this.x * this.size + 'px';
     this.img.style.top = this.y * this.size + 'px';
-    Board.boardElement.appendChild(this.img)
-
-    this.img.onclick = () => {
+    Board.boardElement.appendChild(this.img);
+    this.img.oncontextmenu = () => {
+        // 屏蔽右键菜单(contextmenu)
+        return false
+    };
+    this.img.onmousedown = (event) => {
+        let btnNum = event.button;
+        if (btnNum == 0) {
+            //点击鼠标左键
+            if (this.isLandmine) {
+                this.img.src = "images/landmine.png";
+                alert("结束");
+            }
+            else if (this.neighborLandminesNumber > 0) {
+                this.img.src = "images/" + this.neighborLandminesNumber + ".png";
+            }
+            else {
+                this.img.src = "images/blank.png";
+                function showNeighors(neighbor) {
+                    if (neighbor.neighborLandminesNumber > 0) {
+                        neighbor.img.src = "images/" + neighbor.neighborLandminesNumber + ".png";
+                        return
+                    }
+                    else if (!(neighbor.isLandmine)){
+                        neighbor.img.src = "images/blank.png";
+                    }
+                    else {
+                        return
+                    }
+                    Board.neighborsHandle(neighbor.x, neighbor.y, Main.row-1, Main.col-1, Main.board, showNeighors)
+                };
+                Board.neighborsHandle(this.x, this.y, Main.row-1, Main.col-1, Main.board, showNeighors)
+            }
+        }
+        else if (btnNum == 2) {
+            //点击鼠标右键
+            this.img.src = "images/flag.png";
+        }
 
     }
 };
