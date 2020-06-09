@@ -6,8 +6,8 @@ let Main = {
         this.board = Board.create(this.row, this.col);
         this.board = Board.bury(this.count, this.row, this.col, this.board)
     }
-
 };
+
 let Board = {
     create: function (row, col) {
         this.boardElement = document.getElementById("board");
@@ -24,6 +24,7 @@ let Board = {
                 board[y].push(grid);
             }
         }
+        board.flagCount = 0;
         return board
     },
     bury: function (count, row, col, board) {
@@ -47,7 +48,7 @@ let Board = {
             // 埋雷并划定周边范围为危险区域
             board[landmines[i].y][landmines[i].x].isLandmine = true;
             // board[landmines[i].y][landmines[i].x].img.src = "images/landmine.png";
-            this.neighborsHandle(landmines[i].x, landmines[i].y, row_index, col_index, board, (neighbor) => {
+            this.neighborsHandle(landmines[i].x, landmines[i].y, row_index, col_index, board, true, (neighbor) => {
                 neighbor.neighborLandminesNumber += 1;
                 // if (!(neighbor.isLandmine)) {
                 //     neighbor.img.src = "images/" + neighbor.neighborLandminesNumber + ".png"
@@ -55,9 +56,26 @@ let Board = {
             });
         }
 
+        board.landmines = landmines;
         return board
     },
-    neighborsHandle: function (x, y, row, col, board, action) {
+    checkWin: function (board) {
+        let count = 0;
+        let landmines = board.landmines;
+        if (board.flagCount == landmines.length) {
+            for (let i = 0; i < landmines.length; i++) {
+                if (board[landmines[i].y][landmines[i].x].flag) {
+                    count += 1
+                }
+            }
+            if (count == landmines.length) {
+                return true;
+            }
+        }
+        return false;
+
+    },
+    neighborsHandle: function (x, y, row, col, board, full, action) {
         let neighbors = [];
         if (x > 0) {
             neighbors.push(board[y][x - 1]);
@@ -71,17 +89,19 @@ let Board = {
         if (y < row) {
             neighbors.push(board[y + 1][x]);
         }
-        if (x > 0 && y > 0) {
-            neighbors.push(board[y - 1][x - 1]);
-        }
-        if (x < col && y < row) {
-            neighbors.push(board[y + 1][x + 1]);
-        }
-        if (y > 0 && x < col) {
-            neighbors.push(board[y - 1][x + 1]);
-        }
-        if (x > 0 && y < row) {
-            neighbors.push(board[y + 1][x - 1]);
+        if (full) {
+            if (x > 0 && y > 0) {
+                neighbors.push(board[y - 1][x - 1]);
+            }
+            if (x < col && y < row) {
+                neighbors.push(board[y + 1][x + 1]);
+            }
+            if (y > 0 && x < col) {
+                neighbors.push(board[y - 1][x + 1]);
+            }
+            if (x > 0 && y < row) {
+                neighbors.push(board[y + 1][x - 1]);
+            }
         }
         for (let j = 0; j < neighbors.length; j++) {
             action(neighbors[j])
@@ -95,6 +115,8 @@ function Grid(x, y) {
     this.y = y;
     this.isLandmine = false;
     this.neighborLandminesNumber = 0;
+    this.show = false;
+    this.flag = false;
     this.size = 20;
     this.img = Util.loadImg("images/grid.png");
     this.img.style.height = this.size + 'px';
@@ -102,7 +124,7 @@ function Grid(x, y) {
     this.img.style.left = this.x * this.size + 'px';
     this.img.style.top = this.y * this.size + 'px';
     Board.boardElement.appendChild(this.img);
-    this.img.oncontextmenu = () => {
+    this.img.oncontextmenu = () => {
         // 屏蔽右键菜单(contextmenu)
         return false
     };
@@ -112,34 +134,59 @@ function Grid(x, y) {
             //点击鼠标左键
             if (this.isLandmine) {
                 this.img.src = "images/landmine.png";
-                alert("结束");
-            }
-            else if (this.neighborLandminesNumber > 0) {
-                this.img.src = "images/" + this.neighborLandminesNumber + ".png";
+                this.show = true;
+                setTimeout(function () {
+                    window.alert("你输了!");
+                });
             }
             else {
-                this.img.src = "images/blank.png";
-                function showNeighors(neighbor) {
-                    if (neighbor.neighborLandminesNumber > 0) {
-                        neighbor.img.src = "images/" + neighbor.neighborLandminesNumber + ".png";
-                        return
+                function showNeighors(grid) {
+                    if (!grid.show && !(grid.isLandmine)) {
+                        if (grid.neighborLandminesNumber > 0) {
+                            grid.img.src = "images/" + grid.neighborLandminesNumber + ".png";
+                            grid.show = true;
+                            if (grid.flag) {
+                                grid.flag = false;
+                                Main.board.flagCount -= 1;
+                            }
+                        }
+                        else {
+                            grid.img.src = "images/blank.png";
+                            grid.show = true;
+                            if (grid.flag) {
+                                grid.flag = false;
+                                Main.board.flagCount -= 1;
+                            }
+                            Board.neighborsHandle(grid.x, grid.y, Main.row - 1, Main.col - 1, Main.board, false, showNeighors)
+                        }
                     }
-                    else if (!(neighbor.isLandmine)){
-                        neighbor.img.src = "images/blank.png";
-                    }
-                    else {
-                        return
-                    }
-                    Board.neighborsHandle(neighbor.x, neighbor.y, Main.row-1, Main.col-1, Main.board, showNeighors)
                 };
-                Board.neighborsHandle(this.x, this.y, Main.row-1, Main.col-1, Main.board, showNeighors)
+                showNeighors(this)
             }
         }
         else if (btnNum == 2) {
             //点击鼠标右键
-            this.img.src = "images/flag.png";
+            if (!this.show) {
+                if (!this.flag) {
+                    this.img.src = "images/flag.png";
+                    this.flag = true;
+                    Main.board.flagCount += 1;
+                    if (Board.checkWin(Main.board)) {
+                        setTimeout(function () {
+                            window.alert("你赢了!");
+                        });
+                    }
+                }
+                else {
+                    this.img.src = "images/grid.png";
+                    this.flag = false;
+                    Main.board.flagCount -= 1;
+                }
+            }
+            else {
+                return false;
+            }
         }
-
     }
 };
 
